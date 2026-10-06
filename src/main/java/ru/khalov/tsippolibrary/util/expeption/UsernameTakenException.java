@@ -2,7 +2,6 @@ package ru.khalov.tsippolibrary.util.expeption;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.ErrorResponseException;
 
 public class UsernameTakenException extends ErrorResponseException {
