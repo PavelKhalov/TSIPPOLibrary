@@ -1,6 +1,7 @@
 package ru.khalov.tsippolibrary.dto.response;
 
 public record AuthResponse(
-        String accessToken
+        String accessToken,
+        String refreshToken
 ) {
 }
