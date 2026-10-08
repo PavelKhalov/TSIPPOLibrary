@@ -2,10 +2,8 @@ package ru.khalov.tsippolibrary.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.apache.commons.collections4.functors.InstantiateTransformer;
 
 import java.time.Instant;
-import java.util.IdentityHashMap;
 
 @Table(name = "refresh_token")
 @Entity

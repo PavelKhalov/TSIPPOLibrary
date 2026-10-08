@@ -42,10 +42,10 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain (HttpSecurity http){
         http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth ->
-                        auth.requestMatchers("/api/login", "api/auth").permitAll()
+                        auth.requestMatchers("/api/login", "/api/auth").permitAll()
                                 .requestMatchers("/api/manage/**").hasAnyRole("MANAGER", "OWNER")
                                 .requestMatchers("/api/owner/**").hasAnyRole("OWNER")
-                                .anyRequest().hasAnyRole())
+                                .anyRequest().authenticated())
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authenticationProvider())
