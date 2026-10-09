@@ -30,10 +30,10 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final RefreshTokenService refreshTokenService;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public AuthResponse register(RegisterRequest request){
         if(userRepository.existsByUsername(request.username())){
-            throw new UsernameTakenException("This username already taken");
+            throw new UsernameTakenException(request.username());
         }
 
         User user = new User();
@@ -48,7 +48,7 @@ public class AuthService {
         return new AuthResponse(accessToken, refreshToken.getToken());
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public AuthResponse refresh(String refreshToken){
         RefreshToken oldToken = refreshTokenService.verify(refreshToken);
 

@@ -31,7 +31,6 @@ import ru.khalov.tsippolibrary.service.AuthService;
 public class AuthController {
 
     private final AuthService authService;
-    private final OffsetScrollPositionHandlerMethodArgumentResolver offsetResolver;
 
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Register successful"),

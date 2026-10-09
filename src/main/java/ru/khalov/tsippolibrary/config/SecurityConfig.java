@@ -42,7 +42,10 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain (HttpSecurity http){
         http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth ->
-                        auth.requestMatchers("/api/login", "/api/auth").permitAll()
+                        auth.requestMatchers("/api/auth/login", "/api/auth/register",
+                                        "/swagger-ui/**",
+                                        "/v3/api-docs/**",
+                                        "/swagger-resources/**").permitAll()
                                 .requestMatchers("/api/manage/**").hasAnyRole("MANAGER", "OWNER")
                                 .requestMatchers("/api/owner/**").hasAnyRole("OWNER")
                                 .anyRequest().authenticated())

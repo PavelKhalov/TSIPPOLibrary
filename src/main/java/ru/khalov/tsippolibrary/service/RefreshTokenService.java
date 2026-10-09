@@ -22,7 +22,7 @@ public class RefreshTokenService {
     @Value("${jwt-refresh-expiration}")
     private Long refreshExpiration;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public RefreshToken create(User user){
         refreshTokenRepository.deleteAllByUser(user);
 
@@ -34,7 +34,7 @@ public class RefreshTokenService {
         return refreshTokenRepository.save(refreshToken);
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public RefreshToken verify(String refreshToken){
         RefreshToken token = refreshTokenRepository.findByToken(refreshToken).orElseThrow(() ->
                 new RefreshTokenException("Refresh token not found"));
