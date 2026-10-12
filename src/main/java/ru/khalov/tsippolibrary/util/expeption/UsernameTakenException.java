@@ -7,7 +7,7 @@ import org.springframework.web.ErrorResponseException;
 public class UsernameTakenException extends ErrorResponseException {
 
     private static ProblemDetail asProblem(String username){
-        ProblemDetail problemDetail =ProblemDetail.forStatus(HttpStatus.CONFLICT);
+        ProblemDetail problemDetail = ProblemDetail.forStatus(HttpStatus.CONFLICT);
         problemDetail.setTitle("Username taken");
         problemDetail.setDetail("Пользователь с именем: '%s' уже существует".formatted(username));
         problemDetail.setProperty("username", username);

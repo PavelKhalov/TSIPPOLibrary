@@ -6,14 +6,12 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import ru.khalov.tsippolibrary.dto.request.LoginRequest;
-import ru.khalov.tsippolibrary.dto.request.RefreshRequest;
 import ru.khalov.tsippolibrary.dto.request.RegisterRequest;
 import ru.khalov.tsippolibrary.dto.response.AuthResponse;
 import ru.khalov.tsippolibrary.entity.RefreshToken;
-import ru.khalov.tsippolibrary.entity.Role;
+import ru.khalov.tsippolibrary.util.Role;
 import ru.khalov.tsippolibrary.entity.User;
 import ru.khalov.tsippolibrary.repository.UserRepository;
 import ru.khalov.tsippolibrary.util.expeption.UsernameTakenException;
