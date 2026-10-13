@@ -8,9 +8,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.khalov.tsippolibrary.dto.BookDto;
 import ru.khalov.tsippolibrary.entity.Book;
+import ru.khalov.tsippolibrary.entity.User;
 import ru.khalov.tsippolibrary.repository.BookRepository;
 import ru.khalov.tsippolibrary.util.expeption.BookNotDeletedException;
 import ru.khalov.tsippolibrary.util.expeption.BookNotFoundException;
+import ru.khalov.tsippolibrary.util.expeption.BookNotSavedException;
+import ru.khalov.tsippolibrary.util.expeption.BookNotUpdatedException;
 import ru.khalov.tsippolibrary.util.mapper.BookMapper;
 
 import java.util.List;
@@ -39,35 +42,97 @@ public class BookService {
         return bookRepository.findAll(Sort.by("yearOfRelease")).stream().map(mapper::toDto).toList();
     }
 
+    @PreAuthorize("hasRole('USER') or hasAuthority('MANAGER') or hasRole('OWNER')")
+    public BookDto assign(String title, User user){
+        Book book = bookRepository.findByTitle(title).orElseThrow(() ->
+                new BookNotFoundException(title));
+
+        if(book.getOwner() == null && user != null){
+            book.setOwner(user);
+        }
+
+        bookRepository.flush();
+
+        return mapper.toDto(book);
+    }
+
+    @PreAuthorize("hasRole('USER') or hasAuthority('MANAGER') or hasRole('OWNER')")
+    public BookDto release(String title){
+        Book book = bookRepository.findByTitle(title).orElseThrow(() ->
+                new BookNotFoundException(title));
+
+        if(book.getOwner() != null){
+            book.setOwner(null);
+        }
+        bookRepository.flush();
+
+        return mapper.toDto(book);
+    }
+
+    @PreAuthorize("hasRole('USER') or hasAuthority('MANAGER') or hasRole('OWNER')")
+    public BookDto findById(Long id){
+        return mapper.toDto(bookRepository.findById(id).orElseThrow(() ->
+                new BookNotFoundException("id: " + id)));
+    }
+
+    @PreAuthorize("hasRole('USER') or hasAuthority('MANAGER') or hasRole('OWNER')")
+    public BookDto findByTitle(String title){
+        Book book = bookRepository.findByTitle(title).orElseThrow(() ->
+                new BookNotFoundException(title));
+
+        return mapper.toDto(book);
+    }
+
+
     //// Методы для менеджеров и владельца
 
     @Transactional
     @PreAuthorize("hasAnyRole('MANAGER', 'OWNER')")
-    public Book createBook(BookDto bookDto){
-
-        return bookRepository.save(mapper.toBook(bookDto));
+    public String createBook(BookDto bookDto){
+        try{
+            Book book = mapper.toBook(bookDto);
+            bookRepository.save(book);
+            bookRepository.flush();
+            return "Book saved successfully";
+        } catch (BookNotSavedException e){
+            return e.getMessage();
+        }
     }
 
     @Transactional
     @PreAuthorize("hasAnyRole('MANAGER', 'OWNER')")
-    public Book editBook(String title, BookDto dto){
+    public String editBook(String title, BookDto dto){
         Book book = bookRepository.findByTitle(title).orElseThrow( () ->
                 new BookNotFoundException(title));
+
+        if(book.getOwner() != null){
+            throw new BookNotUpdatedException(title);
+        }
 
         book.setTitle(dto.title());
         book.setAuthor(dto.author());
         book.setYearOfRelease(dto.yearOfRelease());
         book.setGenre(dto.genre());
-
-        bookRepository.save(book);
-
-        return book;
+        try {
+            bookRepository.save(book);
+            bookRepository.flush();
+            return "Book saved successfully";
+        } catch (BookNotSavedException e){
+            return e.getMessage();
+        }
     }
 
     @Transactional
     @PreAuthorize("hasAnyRole('MANAGER', 'OWNER')")
     public String deleteBook(String title){
-        try {
+        Book book = bookRepository.findByTitle(title).orElseThrow(() ->
+                    new BookNotFoundException(title));
+
+        if(book.getOwner() != null){
+            throw new BookNotDeletedException(title);
+        }
+
+        try{
             bookRepository.deleteByTitle(title);
             bookRepository.flush();
 
