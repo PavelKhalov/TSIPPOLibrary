@@ -32,34 +32,33 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         final String authHeader = request.getHeader("Authorization");
 
-        if(authHeader == null || !authHeader.startsWith("Bearer ")){
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        //Убираем "Bearer "
         final String jwt = authHeader.substring(7);
 
-        try{
-            final String username = jwtService.extractUsername(jwt);
+        try {
+            final String email = jwtService.extractUsername(jwt);
 
-            if(username != null && SecurityContextHolder.getContext().getAuthentication() == null){
-                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+            if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-                if(jwtService.isTokenValid(userDetails, jwt)){
+                if (jwtService.isTokenValid(userDetails, jwt)) {
                     var authToken = new UsernamePasswordAuthenticationToken(
                             userDetails, null, userDetails.getAuthorities()
                     );
-
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             }
-        } catch (JwtException e){
-            log.error("Invalid token, error: " + e.getMessage());
+        } catch (JwtException e) {
+            log.debug("Invalid JWT: {}", e.getMessage());
+            // Не прерываем цепочку — SecurityConfig вернёт 401 через AuthenticationEntryPoint
+        } catch (Exception e) {
+            log.debug("JWT filter error: {}", e.getMessage());
         }
         filterChain.doFilter(request, response);
     }
-
 }

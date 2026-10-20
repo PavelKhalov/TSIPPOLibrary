@@ -1,146 +1,116 @@
 package ru.khalov.tsippolibrary.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.khalov.tsippolibrary.dto.BookDto;
 import ru.khalov.tsippolibrary.entity.Book;
-import ru.khalov.tsippolibrary.entity.User;
+import ru.khalov.tsippolibrary.repository.AssignRepository;
 import ru.khalov.tsippolibrary.repository.BookRepository;
+import ru.khalov.tsippolibrary.util.AssignStatus;
+import ru.khalov.tsippolibrary.util.Genre;
 import ru.khalov.tsippolibrary.util.expeption.BookNotDeletedException;
 import ru.khalov.tsippolibrary.util.expeption.BookNotFoundException;
-import ru.khalov.tsippolibrary.util.expeption.BookNotSavedException;
-import ru.khalov.tsippolibrary.util.expeption.BookNotUpdatedException;
 import ru.khalov.tsippolibrary.util.mapper.BookMapper;
 
-import java.util.List;
-
+/**
+ * Сервис книг — ТЗ 3.1.2, диаграммы ВИ-1, ВИ-6, ВИ-7.
+ * - Просмотр каталога с пагинацией/фильтрами (все авторизованные роли)
+ * - Карточка книги кэшируется в Redis, инвалидируется при изменении/удалении (ТЗ 3.1.6)
+ * - Создание/изменение/удаление — только ADMIN/OWNER; удаление запрещено если есть активные бронирования
+ */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BookService {
 
     private final BookRepository bookRepository;
+    private final AssignRepository assignRepository;
     private final BookMapper mapper;
 
-    //// Методы для пользователей
+    // --- Чтение (все авторизованные роли) ---
 
-    @PreAuthorize("hasRole('USER') or hasAuthority('MANAGER') or hasRole('OWNER')")
-    public List<BookDto> findAllBook(){
-        return bookRepository.findAll().stream().map(mapper::toDto).toList();
+    /** Список с пагинацией + фильтрами (ТЗ 3.1.2, ВИ-1) */
+    public Page<BookDto> findAll(String title, String author, Genre genre, Boolean availableOnly, Pageable pageable) {
+        boolean avail = Boolean.TRUE.equals(availableOnly);
+        // normalize empty strings to null
+        String t = (title != null && !title.isBlank()) ? title : null;
+        String a = (author != null && !author.isBlank()) ? author : null;
+        return bookRepository.search(t, a, genre, avail, pageable).map(mapper::toDto);
     }
 
-    @PreAuthorize("hasRole('USER') or hasAuthority('MANAGER') or hasRole('OWNER')")
-    public List<BookDto> findBookWithPagination(Integer page, Integer itemsPerPage) {
-        return bookRepository.findAll(PageRequest.of(page, itemsPerPage)).stream().map(mapper::toDto).toList();
-    }
-
-    @PreAuthorize("hasRole('USER') or hasAuthority('MANAGER') or hasRole('OWNER')")
-    public List<BookDto> findBookWithSort(){
-        return bookRepository.findAll(Sort.by("yearOfRelease")).stream().map(mapper::toDto).toList();
-    }
-
-    @PreAuthorize("hasRole('USER') or hasAuthority('MANAGER') or hasRole('OWNER')")
-    public BookDto assign(String title, User user){
-        Book book = bookRepository.findByTitle(title).orElseThrow(() ->
-                new BookNotFoundException(title));
-
-        if(book.getOwner() == null && user != null){
-            book.setOwner(user);
-        }
-
-        bookRepository.flush();
-
+    /** Карточка книги — кэшируется (ТЗ 3.1.6, ВИ-6). Fallback на БД если Redis недоступен. */
+    @Cacheable(value = "books", key = "#id", unless = "#result == null")
+    public BookDto findById(Long id) {
+        Book book = bookRepository.findById(id).orElseThrow(() ->
+                new BookNotFoundException("id: " + id));
         return mapper.toDto(book);
     }
 
-    @PreAuthorize("hasRole('USER') or hasAuthority('MANAGER') or hasRole('OWNER')")
-    public BookDto release(String title){
-        Book book = bookRepository.findByTitle(title).orElseThrow(() ->
-                new BookNotFoundException(title));
-
-        if(book.getOwner() != null){
-            book.setOwner(null);
-        }
-        bookRepository.flush();
-
-        return mapper.toDto(book);
-    }
-
-    @PreAuthorize("hasRole('USER') or hasAuthority('MANAGER') or hasRole('OWNER')")
-    public BookDto findById(Long id){
-        return mapper.toDto(bookRepository.findById(id).orElseThrow(() ->
-                new BookNotFoundException("id: " + id)));
-    }
-
-    @PreAuthorize("hasRole('USER') or hasAuthority('MANAGER') or hasRole('OWNER')")
-    public BookDto findByTitle(String title){
-        Book book = bookRepository.findByTitle(title).orElseThrow(() ->
-                new BookNotFoundException(title));
-
-        return mapper.toDto(book);
-    }
-
-
-    //// Методы для менеджеров и владельца
+    // --- Управление (ADMIN/OWNER) ---
 
     @Transactional
-    @PreAuthorize("hasAnyRole('MANAGER', 'OWNER')")
-    public String createBook(BookDto bookDto){
-        try{
-            Book book = mapper.toBook(bookDto);
-            bookRepository.save(book);
-            bookRepository.flush();
-            return "Book saved successfully";
-        } catch (BookNotSavedException e){
-            return e.getMessage();
-        }
+    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    @CacheEvict(value = "books", allEntries = true)
+    public BookDto createBook(BookDto dto) {
+        Book book = mapper.toEntityForCreate(dto);
+        // available = total при создании
+        if (book.getAvailableCopies() == 0) book.setAvailableCopies(book.getTotalCopies());
+        Book saved = bookRepository.save(book);
+        log.info("Book created: id={}, title={}", saved.getId(), saved.getTitle());
+        return mapper.toDto(saved);
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('MANAGER', 'OWNER')")
-    public String editBook(String title, BookDto dto){
-        Book book = bookRepository.findByTitle(title).orElseThrow( () ->
-                new BookNotFoundException(title));
+    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    @CacheEvict(value = "books", key = "#id")
+    public BookDto updateBook(Long id, BookDto dto) {
+        Book book = bookRepository.findById(id).orElseThrow(() ->
+                new BookNotFoundException("id: " + id));
 
-        if(book.getOwner() != null){
-            throw new BookNotUpdatedException(title);
+        // Пересчёт доступных экземпляров при изменении totalCopies
+        int oldTotal = book.getTotalCopies();
+        int oldAvailable = book.getAvailableCopies();
+        int newTotal = dto.totalCopies() != null ? dto.totalCopies() : oldTotal;
+        // borrowed = total - available, должен сохраниться
+        int borrowed = oldTotal - oldAvailable;
+        if (newTotal < borrowed) {
+            throw new IllegalArgumentException("Total copies cannot be less than borrowed copies (" + borrowed + ")");
         }
+        int newAvailable = newTotal - borrowed;
 
         book.setTitle(dto.title());
         book.setAuthor(dto.author());
-        book.setYearOfRelease(dto.yearOfRelease());
         book.setGenre(dto.genre());
-        try {
-            bookRepository.save(book);
-            bookRepository.flush();
-            return "Book saved successfully";
-        } catch (BookNotSavedException e){
-            return e.getMessage();
-        }
+        book.setYearOfRelease(dto.yearOfRelease());
+        book.setTotalCopies(newTotal);
+        book.setAvailableCopies(newAvailable);
+
+        Book saved = bookRepository.save(book);
+        return mapper.toDto(saved);
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('MANAGER', 'OWNER')")
-    public String deleteBook(String title){
-        Book book = bookRepository.findByTitle(title).orElseThrow(() ->
-                    new BookNotFoundException(title));
+    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    @CacheEvict(value = "books", key = "#id")
+    public void deleteBook(Long id) {
+        Book book = bookRepository.findById(id).orElseThrow(() ->
+                new BookNotFoundException("id: " + id));
 
-        if(book.getOwner() != null){
-            throw new BookNotDeletedException(title);
+        // ТЗ 3.1.2: удаление книги с активными бронированиями запрещается → 409
+        // Исправлено: считаем через exists/count, а не через Page.getTotalElements()
+        boolean hasActive = assignRepository.existsByBookIdAndStatus(id, AssignStatus.ACTIVE);
+        if (hasActive) {
+            throw new BookNotDeletedException(book.getTitle());
         }
 
-        try{
-            bookRepository.deleteByTitle(title);
-            bookRepository.flush();
-
-            return "Book deleted successful";
-        } catch (BookNotDeletedException e){
-            return e.getMessage();
-        }
+        bookRepository.delete(book);
+        log.info("Book deleted: id={}, title={}", id, book.getTitle());
     }
-
-
 }

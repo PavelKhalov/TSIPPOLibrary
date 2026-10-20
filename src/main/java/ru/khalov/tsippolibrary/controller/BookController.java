@@ -1,76 +1,63 @@
 package ru.khalov.tsippolibrary.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.apache.coyote.Response;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import ru.khalov.tsippolibrary.dto.BookDto;
-import ru.khalov.tsippolibrary.entity.User;
 import ru.khalov.tsippolibrary.service.BookService;
+import ru.khalov.tsippolibrary.util.Genre;
 
-import java.util.List;
-
-@RestControllerAdvice
+/**
+ * Книги — ТЗ 3.2.7, ВИ-1, ВИ-6, ВИ-7
+ * GET    /api/books        — список с пагинацией/фильтрами (все роли)
+ * GET    /api/books/{id}   — карточка (кэш Redis)
+ * POST   /api/books        — создать (ADMIN/OWNER)
+ * PUT    /api/books/{id}   — изменить (ADMIN/OWNER)
+ * DELETE /api/books/{id}   — удалить (ADMIN/OWNER, нельзя если есть активные бронирования)
+ */
+@Tag(name = "Books")
+@RestController
+@RequestMapping("/api/books")
 @RequiredArgsConstructor
-@RequestMapping("/api/book")
 public class BookController {
 
     private final BookService bookService;
 
-    @GetMapping()
-    public ResponseEntity<List<BookDto>> findAllBook(@RequestParam(value = "page", required = false) Integer page,
-                                                     @RequestParam(value = "itemsPerPage", required = false) Integer itemsPerPage,
-                                                     @RequestParam(value = "sortByYear", required = false) boolean sort,
-                                                     @RequestParam(value = "title", required = false) String title) {
-
-        if (page != null && itemsPerPage != null && page >= 0 && itemsPerPage >= 0) {
-            return ResponseEntity.ok().body(bookService.findBookWithPagination(page, itemsPerPage));
-        } else if (sort){
-            return ResponseEntity.ok().body(bookService.findBookWithSort());
-        } else if(title != null) {
-            return ResponseEntity.ok().body(List.of(bookService.findByTitle(title)));
-        }
-        else{
-            return ResponseEntity.ok().body(bookService.findAllBook());
-        }
+    @GetMapping
+    public ResponseEntity<Page<BookDto>> findAll(
+            @RequestParam(required = false) String title,
+            @RequestParam(required = false) String author,
+            @RequestParam(required = false) Genre genre,
+            @RequestParam(required = false) Boolean availableOnly,
+            @PageableDefault(size = 20, sort = "id") Pageable pageable) {
+        return ResponseEntity.ok(bookService.findAll(title, author, genre, availableOnly, pageable));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<BookDto> findById(@PathVariable Long id){
-        return ResponseEntity.ok().body(bookService.findById(id));
+    public ResponseEntity<BookDto> findById(@PathVariable Long id) {
+        return ResponseEntity.ok(bookService.findById(id));
     }
 
-    @PostMapping("/assign")
-    public ResponseEntity<BookDto> assignBook(@RequestParam(value = "title") String title,
-                                              @AuthenticationPrincipal User user){
-        return ResponseEntity.ok().body(bookService.assign(title, user));
+    @PostMapping
+    public ResponseEntity<BookDto> create(@RequestBody @Valid BookDto dto) {
+        BookDto created = bookService.createBook(dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
-    @PostMapping("/release")
-    public ResponseEntity<BookDto> releaseBook(@RequestParam(value = "title") String title){
-        return ResponseEntity.ok().body(bookService.release(title));
+    @PutMapping("/{id}")
+    public ResponseEntity<BookDto> update(@PathVariable Long id, @RequestBody @Valid BookDto dto) {
+        return ResponseEntity.ok(bookService.updateBook(id, dto));
     }
 
-
-    //// Методы менеджеров и владельцев
-    // TODO
-
-    @PostMapping()
-    public ResponseEntity<String> createBook(@RequestBody @Valid BookDto bookDto){
-        return ResponseEntity.status(HttpStatus.CREATED).body(bookService.createBook(bookDto));
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        bookService.deleteBook(id);
+        return ResponseEntity.noContent().build();
     }
-
-    @PostMapping("/update")
-    public ResponseEntity<String> editBook(@RequestParam(value = "title") String title, @RequestBody @Valid BookDto bookDto){
-        return ResponseEntity.ok().body(bookService.editBook(title, bookDto));
-    }
-
-    @DeleteMapping
-    public ResponseEntity<String> deleteBook(@RequestParam(value = "title") String title){
-        return ResponseEntity.ok().body(bookService.deleteBook(title));
-    }
-
 }

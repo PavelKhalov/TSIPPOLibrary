@@ -1,12 +1,17 @@
 package ru.khalov.tsippolibrary.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
 import lombok.*;
-import org.hibernate.annotations.OptimisticLock;
 import ru.khalov.tsippolibrary.util.Genre;
 
 import java.time.Instant;
 
+/**
+ * Книга — основная сущность каталога (ТЗ 3.3.2, 3.1.2).
+ * Хранит общее и доступное количество экземпляров.
+ * Доступное количество уменьшается при бронировании и увеличивается при возврате.
+ */
 @Entity
 @Table(name = "books")
 @AllArgsConstructor
@@ -20,36 +25,52 @@ public class Book {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "title", unique = true, nullable = false)
+    @Column(name = "title", nullable = false)
     private String title;
 
     @Column(name = "author", nullable = false)
     private String author;
 
-    @Column(name = "genre", nullable = false)
-    @CollectionTable(name = "genres", joinColumns = @JoinColumn(name = "genre_id", referencedColumnName = "id"))
+    // Жанр — один на книгу (ТЗ 3.1.2)
     @Enumerated(EnumType.STRING)
+    @Column(name = "genre", nullable = false)
     private Genre genre;
 
     @Column(name = "year_of_release", nullable = false)
     private int yearOfRelease;
 
-    @Column(name = "is_reserved")
-    private boolean isReserved = false;
+    // Общее количество экземпляров
+    @Column(name = "total_copies", nullable = false)
+    @Min(1)
+    @Builder.Default
+    private int totalCopies = 1;
 
-    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)
-    @JoinColumn(name = "owner_id", referencedColumnName = "id")
-    private User owner;
+    // Доступно для бронирования (0..totalCopies)
+    @Column(name = "available_copies", nullable = false)
+    @Builder.Default
+    private int availableCopies = 1;
 
-    @Column(name = "created_at")
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    @Version
-    @OptimisticLock(excluded = true)
-    private Long version;
+    @Column(name = "updated_at")
+    private Instant updatedAt;
+
+    // Убран @Version - используется пессимистическая блокировка findByIdForUpdate (ТЗ 3.1.3), смешение ломало старт
+    // @Version оставлен только если нужна оптимистика, но сейчас гонка решается PESSIMISTIC_WRITE
 
     @PrePersist
-    public void prePersist(){
+    public void prePersist() {
         this.createdAt = Instant.now();
+        this.updatedAt = Instant.now();
+        // Если available не задан — синхронизируем с total
+        if (this.availableCopies == 0 && this.totalCopies > 0) {
+            this.availableCopies = this.totalCopies;
+        }
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = Instant.now();
     }
 }

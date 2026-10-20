@@ -1,11 +1,16 @@
 package ru.khalov.tsippolibrary.dto;
 
-import jakarta.validation.constraints.Size;
+import ru.khalov.tsippolibrary.util.Role;
 
+import java.time.Instant;
+import java.util.Set;
+
+/** DTO пользователя — без пароля (ТЗ 3.5.5: пароли не попадают в ответ) */
 public record UserDto(
-
-        @Size(min = 1, max = 100, message = "Username should be from 1 to 100")
-        String username
-
+        Long id,
+        String username,
+        String email,
+        Set<Role> roles,
+        Instant createdAt
 ) {
 }

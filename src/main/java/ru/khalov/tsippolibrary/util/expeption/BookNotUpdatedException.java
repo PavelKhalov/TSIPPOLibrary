@@ -1,6 +1,5 @@
 package ru.khalov.tsippolibrary.util.expeption;
 
-import io.netty.channel.unix.PeerCredentials;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.ErrorResponseException;
