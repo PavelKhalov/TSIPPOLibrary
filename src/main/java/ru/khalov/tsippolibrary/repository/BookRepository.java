@@ -28,8 +28,8 @@ public interface BookRepository extends JpaRepository<Book, Long> {
     // Фильтрация каталога: поиск по названию, автору, жанру, наличию (ТЗ 3.1.2)
     @Query("""
             select b from Book b
-            where (:title is null or lower(b.title) like lower(concat('%', :title, '%')))
-              and (:author is null or lower(b.author) like lower(concat('%', :author, '%')))
+            where (:title is null or lower(b.title) like lower(concat('%', cast(:title as String), '%')))
+              and (:author is null or lower(b.author) like lower(concat('%', cast(:author as String), '%')))
               and (:genre is null or b.genre = :genre)
               and (:availableOnly = false or b.availableCopies > 0)
             """)
